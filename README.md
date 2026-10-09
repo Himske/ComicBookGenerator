@@ -26,7 +26,7 @@ starting the API to use a different local Ollama server or Qwen model tag. For
 example:
 
 ```powershell
-$env:OLLAMA_MODEL = "qwen2.5:7b"
+$env:OLLAMA_MODEL = "qwen3.5:4b"
 uv run uvicorn main:app --reload
 ```
 
