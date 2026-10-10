@@ -4,11 +4,10 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
-from image_generation import generate_image
 from models import (
     CharacterAttributes,
     CharacterPromptOptions,
@@ -16,10 +15,9 @@ from models import (
     ComicRequest,
     ComicResponse,
     GeneratedPanels,
-    ImageGenerationRequest,
     Panel,
 )
-from text_generation import TRANSFORMERS_MODEL, generate_text
+from text_generation import OLLAMA_MODEL, generate_text
 
 router = APIRouter()
 logger = logging.getLogger("comicbookgenerator")
@@ -78,9 +76,9 @@ def generate_character_prompt(
     )
     if not prompt:
         logger.error(
-            "Configured Transformers model returned an empty character prompt "
+            "Configured Ollama model returned an empty character prompt "
             "model=%s",
-            TRANSFORMERS_MODEL,
+            OLLAMA_MODEL,
         )
         raise HTTPException(
             status_code=502,
@@ -115,7 +113,7 @@ async def read_example_images(example_images: list[UploadFile]) -> list[bytes]:
 
 
 def generate_panels(request: ComicRequest) -> list[Panel]:
-    """Generate a comic storyboard using the selected local text model."""
+    """Generate a comic storyboard using the configured Ollama model."""
     messages = [
         {
             "role": "system",
@@ -143,8 +141,8 @@ def generate_panels(request: ComicRequest) -> list[Panel]:
         generated = GeneratedPanels.model_validate_json(response_text)
     except ValidationError as error:
         logger.exception(
-            "Configured Transformers model returned invalid comic JSON model=%s",
-            TRANSFORMERS_MODEL,
+            "Configured Ollama model returned invalid comic JSON model=%s",
+            OLLAMA_MODEL,
         )
         raise HTTPException(
             status_code=502,
@@ -229,29 +227,6 @@ async def create_character_prompt_from_examples(
     )
     return await run_in_threadpool(
         generate_character_prompt, attributes, images or None
-    )
-
-
-@router.post("/images", response_class=Response)
-async def create_image(request: ImageGenerationRequest):
-    try:
-        image_bytes = await run_in_threadpool(generate_image, request.prompt)
-    except ModuleNotFoundError as error:
-        logger.exception("Image generation dependencies are unavailable")
-        raise HTTPException(
-            status_code=503,
-            detail="Image generation dependencies are not installed. See the setup instructions.",
-        ) from error
-    except Exception as error:
-        logger.exception("Stable Diffusion image generation failed")
-        raise HTTPException(
-            status_code=500,
-            detail="Image generation failed. Check the backend logs for details.",
-        ) from error
-    return Response(
-        content=image_bytes,
-        media_type="image/png",
-        headers={"Content-Disposition": 'inline; filename="character.png"'},
     )
 
 

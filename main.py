@@ -25,9 +25,7 @@ logger = logging.getLogger("comicbookgenerator")
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO").upper())
 logger.propagate = False
 
-log_format = logging.Formatter(
-    "%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s"
-)
+log_format = logging.Formatter("%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s")
 project_root = Path(__file__).parent
 log_file = Path(os.getenv("LOG_FILE", "logs/comicbookgenerator.log"))
 if not log_file.is_absolute():
@@ -35,8 +33,7 @@ if not log_file.is_absolute():
 log_file.parent.mkdir(parents=True, exist_ok=True)
 
 if not any(
-    isinstance(handler, logging.StreamHandler)
-    and not isinstance(handler, logging.FileHandler)
+    isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler)
     for handler in logger.handlers
 ):
     console_handler = logging.StreamHandler()
@@ -45,8 +42,7 @@ if not any(
     logger.addHandler(console_handler)
 
 if not any(
-    isinstance(handler, RotatingFileHandler)
-    and Path(handler.baseFilename) == log_file.resolve()
+    isinstance(handler, RotatingFileHandler) and Path(handler.baseFilename) == log_file.resolve()
     for handler in logger.handlers
 ):
     file_handler = RotatingFileHandler(
@@ -77,13 +73,7 @@ async def log_requests(
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         status_code = response.status_code
-        log_level = (
-            logging.ERROR
-            if status_code >= 500
-            else logging.WARNING
-            if status_code >= 400
-            else logging.INFO
-        )
+        log_level = logging.ERROR if status_code >= 500 else logging.WARNING if status_code >= 400 else logging.INFO
         logger.log(
             log_level,
             "Request completed method=%s path=%s status=%s duration_ms=%.2f",
