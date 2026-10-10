@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#fff8ed">
+    <title>Character from Traits | Comic Book Generator</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/script.js?v=20261010-3" defer></script>
+  </head>
+  <body>
+    <main>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="/">Generate a comic</a>
+        <a href="/character/traits" aria-current="page">Character from traits</a>
+        <a href="/character/examples">Character from images</a>
+      </nav>
+      <p class="eyebrow">Character design</p>
+      <h1>Create a character prompt</h1>
+      <p class="intro">Describe the character's appearance and art style.</p>
+
+      <form id="character-form">
+        <div class="character-fields">
+          <div class="field">
+            <label for="character-age">Age</label>
+            <input id="character-age" name="age" maxlength="100" placeholder="e.g. young adult" required>
+          </div>
+          <div class="field">
+            <label for="character-gender">Gender</label>
+            <input id="character-gender" name="gender" maxlength="100" placeholder="e.g. woman" required>
+          </div>
+          <div class="field">
+            <label for="character-hair-colour">Hair colour</label>
+            <input id="character-hair-colour" name="hair_colour" maxlength="100" placeholder="e.g. auburn" required>
+          </div>
+          <div class="field">
+            <label for="character-eye-colour">Eye colour</label>
+            <input id="character-eye-colour" name="eye_colour" maxlength="100" placeholder="e.g. green" required>
+          </div>
+          <div class="field">
+            <label for="character-skin-colour">Skin colour</label>
+            <input id="character-skin-colour" name="skin_colour" maxlength="100" placeholder="e.g. warm brown" required>
+          </div>
+          <div class="field">
+            <label for="character-body-type">Body type</label>
+            <input id="character-body-type" name="body_type" maxlength="100" placeholder="e.g. athletic" required>
+          </div>
+        </div>
+        <div class="field">
+          <label for="character-specific-features">Specific features (optional)</label>
+          <input id="character-specific-features" name="specific_features" maxlength="500" placeholder="e.g. freckles, round glasses">
+        </div>
+        <div class="field">
+          <label for="character-style">Art style</label>
+          <input id="character-style" name="style" value="bright, expressive comic art" maxlength="200">
+        </div>
+        <button id="character-submit-button" type="submit">
+          <span id="character-button-label">Generate from traits</span>
+        </button>
+      </form>
+
+      <section id="character-result" aria-live="polite" aria-busy="false">
+        <p id="character-status" role="status"></p>
+        <article id="character-prompt-card" class="comic-card" hidden>
+          <h2>Character image prompt</h2>
+          <textarea id="character-prompt-output" aria-label="Generated character image prompt" readonly></textarea>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

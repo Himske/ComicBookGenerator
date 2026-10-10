@@ -1,0 +1,13 @@
+Generate character:
+===================
+Generate prompt for character.
+- Age
+- Gender
+- Hair colour
+- Eye colour
+- Skin colour
+- Body type
+- Specific features
+- Style
+
+Generate based on example images
