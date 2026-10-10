@@ -151,6 +151,11 @@ const characterStatus = document.querySelector("#character-status");
 const characterResult = document.querySelector("#character-result");
 const characterPromptCard = document.querySelector("#character-prompt-card");
 const characterPromptOutput = document.querySelector("#character-prompt-output");
+const generateImageButton = document.querySelector("#generate-image-button");
+const imageStatus = document.querySelector("#image-status");
+const generatedCharacterImage = document.querySelector("#generated-character-image");
+const downloadCharacterImage = document.querySelector("#download-character-image");
+let generatedImageUrl;
 
 async function submitCharacterPrompt(event, form, button, buttonLabel, useImages) {
   event.preventDefault();
@@ -183,8 +188,15 @@ async function submitCharacterPrompt(event, form, button, buttonLabel, useImages
       "The character prompt could not be generated. Please try again.",
     );
     characterStatus.textContent = "";
-    characterPromptOutput.textContent = body.prompt;
+    characterPromptOutput.value = body.prompt;
     characterPromptCard.hidden = false;
+    generatedCharacterImage.hidden = true;
+    downloadCharacterImage.hidden = true;
+    imageStatus.textContent = "";
+    if (generatedImageUrl) {
+      URL.revokeObjectURL(generatedImageUrl);
+      generatedImageUrl = undefined;
+    }
   } catch (error) {
     characterStatus.className = "error";
     characterStatus.textContent = error instanceof Error
@@ -215,4 +227,36 @@ if (characterExamplesForm) characterExamplesForm.addEventListener("submit", (eve
     examplesButtonLabel,
     true,
   );
+});
+
+if (generateImageButton) generateImageButton.addEventListener("click", async () => {
+  generateImageButton.disabled = true;
+  imageStatus.className = "";
+  imageStatus.textContent = "Generating image… This may take a few minutes the first time.";
+  try {
+    const response = await fetch("/images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: characterPromptOutput.value }),
+    });
+    if (!response.ok) {
+      await readApiResponse(response, "The image could not be generated. Please try again.");
+    }
+
+    const imageBlob = await response.blob();
+    if (generatedImageUrl) URL.revokeObjectURL(generatedImageUrl);
+    generatedImageUrl = URL.createObjectURL(imageBlob);
+    generatedCharacterImage.src = generatedImageUrl;
+    generatedCharacterImage.hidden = false;
+    downloadCharacterImage.href = generatedImageUrl;
+    downloadCharacterImage.hidden = false;
+    imageStatus.textContent = "";
+  } catch (error) {
+    imageStatus.className = "error";
+    imageStatus.textContent = error instanceof Error
+      ? error.message
+      : "Something went wrong while generating the image.";
+  } finally {
+    generateImageButton.disabled = false;
+  }
 });

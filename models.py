@@ -47,6 +47,10 @@ class CharacterPromptResponse(BaseModel):
     prompt: str
 
 
+class ImageGenerationRequest(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4_000)
+
+
 class GeneratedPanel(BaseModel):
     description: str
     dialogue: str = ""

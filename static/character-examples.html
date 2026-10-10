@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#fff8ed">
     <title>Character from Images | Comic Book Generator</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script src="/static/script.js?v=20261010-3" defer></script>
+    <script src="/static/script.js?v=20261010-4" defer></script>
   </head>
   <body>
     <main>
@@ -42,7 +42,11 @@
         <p id="character-status" role="status"></p>
         <article id="character-prompt-card" class="comic-card" hidden>
           <h2>Character image prompt</h2>
-          <textarea id="character-prompt-output" aria-label="Generated character image prompt" readonly></textarea>
+          <textarea id="character-prompt-output" aria-label="Editable character image prompt"></textarea>
+          <button id="generate-image-button" type="button">Generate image from prompt</button>
+          <p id="image-status" role="status"></p>
+          <img id="generated-character-image" alt="Generated character" hidden>
+          <a id="download-character-image" download="character.png" hidden>Download image</a>
         </article>
       </section>
     </main>

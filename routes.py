@@ -1,14 +1,14 @@
 import logging
-import os
 from pathlib import Path
 from typing import Annotated
 from uuid import uuid4
 
-import ollama
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from pydantic import ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from image_generation import generate_image
 from models import (
     CharacterAttributes,
     CharacterPromptOptions,
@@ -16,17 +16,16 @@ from models import (
     ComicRequest,
     ComicResponse,
     GeneratedPanels,
+    ImageGenerationRequest,
     Panel,
 )
+from text_generation import TRANSFORMERS_MODEL, generate_text
 
 router = APIRouter()
 logger = logging.getLogger("comicbookgenerator")
 STATIC_PATH = Path(__file__).parent / "static"
 MAX_EXAMPLE_IMAGE_BYTES = 10 * 1024 * 1024
 MAX_EXAMPLE_IMAGES = 5
-
-OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3.5:4b")
 
 
 def generate_character_prompt(
@@ -47,64 +46,45 @@ def generate_character_prompt(
         for label, value in specified_attributes
         if value and value.strip()
     )
-    user_message = {
-        "role": "user",
-        "content": (
-            "Create one polished image-generation prompt for a character reference "
-            "image. Include the character's full-body appearance, a clear readable "
-            "pose, and a simple uncluttered background. Keep the prompt concise and "
-            "do not add contradictory details. Use the reference images as the "
-            "source of truth for any traits not specified below.\n"
-            f"{attribute_details or 'No character traits specified.'}\n"
-            f"Specific features: {attributes.specific_features or 'none specified'}\n"
-            f"Art style: {attributes.style}"
-        ),
-    }
-    if example_images:
-        user_message["images"] = example_images
-
-    try:
-        response = ollama.Client(host=OLLAMA_HOST).chat(
-            model=OLLAMA_MODEL,
-            think=False,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Write a single image-generation prompt for a character "
-                        "reference image. When reference images are provided, use them "
-                        "to guide the character's visual design while following the "
-                        "explicit attributes. Return only the prompt."
-                    ),
-                },
-                user_message,
-            ],
-        )
-    except ollama.RequestError as error:
-        logger.exception("Ollama connection failed while generating a character prompt")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Could not connect to the configured Ollama server: {error}",
-        ) from error
-    except ollama.ResponseError as error:
-        logger.exception("Ollama rejected character prompt generation")
-        raise HTTPException(
-            status_code=502,
-            detail=f"Ollama could not generate the character prompt: {error.error}",
-        ) from error
-    prompt = response.message.content.strip()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Write a single image-generation prompt for a character reference "
+                "image. When reference images are provided, use them to guide the "
+                "character's visual design while following the explicit attributes. "
+                "Return only the prompt without reasoning or commentary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Create one polished image-generation prompt for a character "
+                "reference image. Include the character's full-body appearance, "
+                "a clear readable pose, and a simple uncluttered background. Keep "
+                "the prompt concise and do not add contradictory details. Use the "
+                "reference images as the source of truth for any traits not "
+                "specified below.\n"
+                f"{attribute_details or 'No character traits specified.'}\n"
+                f"Specific features: {attributes.specific_features or 'none specified'}\n"
+                f"Art style: {attributes.style}"
+            ),
+        },
+    ]
+    prompt = generate_text(
+        messages,
+        images=example_images,
+        max_new_tokens=512,
+    )
     if not prompt:
         logger.error(
-            "Ollama returned an empty character prompt model=%s done_reason=%s "
-            "thinking_length=%d eval_count=%s",
-            response.model,
-            response.done_reason,
-            len(response.message.thinking or ""),
-            response.eval_count,
+            "Configured Transformers model returned an empty character prompt "
+            "model=%s",
+            TRANSFORMERS_MODEL,
         )
         raise HTTPException(
             status_code=502,
-            detail="The configured Ollama model returned an empty character prompt.",
+            detail="The configured text model returned an empty character prompt.",
         )
     return CharacterPromptResponse(prompt=prompt)
 
@@ -135,49 +115,47 @@ async def read_example_images(example_images: list[UploadFile]) -> list[bytes]:
 
 
 def generate_panels(request: ComicRequest) -> list[Panel]:
-    """Generate a comic storyboard using the configured local Ollama model."""
+    """Generate a comic storyboard using the selected local text model."""
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Create concise, coherent comic panels that advance the story. "
+                "Keep characters visually consistent. Return the requested "
+                "number of panels and follow the provided JSON schema."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Premise: {request.premise}\n"
+                f"Art style: {request.style}\n"
+                f"Create exactly {request.panel_count} panels."
+            ),
+        },
+    ]
+    response_text = generate_text(
+        messages,
+        json_schema=GeneratedPanels.model_json_schema(),
+        max_new_tokens=2048,
+    )
     try:
-        response = ollama.Client(host=OLLAMA_HOST).chat(
-            model=OLLAMA_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "Create concise, coherent comic panels that advance the story. "
-                        "Keep characters visually consistent. Return the requested "
-                        "number of panels and follow the provided JSON schema."
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        f"Premise: {request.premise}\n"
-                        f"Art style: {request.style}\n"
-                        f"Create exactly {request.panel_count} panels."
-                    ),
-                },
-            ],
-            format=GeneratedPanels.model_json_schema(),
+        generated = GeneratedPanels.model_validate_json(response_text)
+    except ValidationError as error:
+        logger.exception(
+            "Configured Transformers model returned invalid comic JSON model=%s",
+            TRANSFORMERS_MODEL,
         )
-    except ollama.RequestError as error:
-        logger.exception("Ollama connection failed while generating comic panels")
-        raise HTTPException(
-            status_code=503,
-            detail=f"Could not connect to the configured Ollama server: {error}",
-        ) from error
-    except ollama.ResponseError as error:
-        logger.exception("Ollama rejected comic generation")
         raise HTTPException(
             status_code=502,
-            detail=f"Ollama could not generate comic panels: {error.error}",
+            detail="The configured text model returned invalid comic JSON.",
         ) from error
-    generated = GeneratedPanels.model_validate_json(response.message.content)
     if len(generated.panels) != request.panel_count:
         raise HTTPException(
             status_code=502,
             detail=(
-                "The configured Ollama model returned "
-                f"{len(generated.panels)} panels; expected {request.panel_count}."
+                f"The configured text model returned {len(generated.panels)} "
+                f"panels; expected {request.panel_count}."
             ),
         )
 
@@ -251,6 +229,29 @@ async def create_character_prompt_from_examples(
     )
     return await run_in_threadpool(
         generate_character_prompt, attributes, images or None
+    )
+
+
+@router.post("/images", response_class=Response)
+async def create_image(request: ImageGenerationRequest):
+    try:
+        image_bytes = await run_in_threadpool(generate_image, request.prompt)
+    except ModuleNotFoundError as error:
+        logger.exception("Image generation dependencies are unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Image generation dependencies are not installed. See the setup instructions.",
+        ) from error
+    except Exception as error:
+        logger.exception("Stable Diffusion image generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Image generation failed. Check the backend logs for details.",
+        ) from error
+    return Response(
+        content=image_bytes,
+        media_type="image/png",
+        headers={"Content-Disposition": 'inline; filename="character.png"'},
     )
 
 

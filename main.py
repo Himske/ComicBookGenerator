@@ -1,6 +1,7 @@
 import logging
 import os
 from contextvars import ContextVar, Token
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from time import perf_counter
 from uuid import uuid4
@@ -23,15 +24,40 @@ class RequestIdFilter(logging.Filter):
 logger = logging.getLogger("comicbookgenerator")
 logger.setLevel(os.getenv("LOG_LEVEL", "INFO").upper())
 logger.propagate = False
-if not logger.handlers:
-    log_handler = logging.StreamHandler()
-    log_handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s"
-        )
+
+log_format = logging.Formatter(
+    "%(asctime)s %(levelname)s [%(request_id)s] %(name)s: %(message)s"
+)
+project_root = Path(__file__).parent
+log_file = Path(os.getenv("LOG_FILE", "logs/comicbookgenerator.log"))
+if not log_file.is_absolute():
+    log_file = project_root / log_file
+log_file.parent.mkdir(parents=True, exist_ok=True)
+
+if not any(
+    isinstance(handler, logging.StreamHandler)
+    and not isinstance(handler, logging.FileHandler)
+    for handler in logger.handlers
+):
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_format)
+    console_handler.addFilter(RequestIdFilter())
+    logger.addHandler(console_handler)
+
+if not any(
+    isinstance(handler, RotatingFileHandler)
+    and Path(handler.baseFilename) == log_file.resolve()
+    for handler in logger.handlers
+):
+    file_handler = RotatingFileHandler(
+        log_file,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
     )
-    log_handler.addFilter(RequestIdFilter())
-    logger.addHandler(log_handler)
+    file_handler.setFormatter(log_format)
+    file_handler.addFilter(RequestIdFilter())
+    logger.addHandler(file_handler)
 
 app = FastAPI(title="Comic Generator API", version="0.1.0")
 FRONTEND_PATH = Path(__file__).parent / "static" / "index.html"
